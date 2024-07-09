@@ -3,15 +3,10 @@ export interface StartPoint {
   y: number;
 }
 
-export interface CircleData {
-  key: number;
-  points: { x: number; y: number };
-}
-
 export interface PolygonData {
   key: number;
   startPoint: StartPoint;
-  linePoints: number[];
-  circlePoints: CircleData[];
+  polyPoints: number[];
+  circlePoints: number[][];
   origin: [x: number, y: number];
 }

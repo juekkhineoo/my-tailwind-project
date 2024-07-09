@@ -4,13 +4,18 @@ import React, { useEffect, useRef, useState } from "react";
 import { Stage, Layer } from "react-konva";
 import _flatten from "lodash/flatten";
 import Polygon from "./drawPolygon";
-import { StartPoint, PolygonData, CircleData } from "../types/polygontypes";
+import { StartPoint, PolygonData } from "../types/polygontypes";
+import SplicePoints from "../utils/splicPoints";
+import UniqueSet from "../utils/uniqueSet";
+import RelativeToAbsolutePoints from "../utils/relativeToAbsolutePoints";
+import UpdatePolygonPoints from "../utils/updatePolytonPoints";
+import AddNewPolygons from "../utils/addNewPolygon";
 
 const DrawPolygon: React.FC = () => {
   const startPointObj: StartPoint = { x: 0, y: 0 };
   const [polygonList, setPolygonList] = useState<PolygonData[]>([]);
-  const [linePoints, setLinePoints] = useState<number[]>([]);
-  const [circlePoints, setCirclePoints] = useState<CircleData[]>([]);
+  const [lineMovePoints, setLineMovePoints] = useState<number[]>([]);
+  const [circlePoints, setCirclePoints] = useState<number[]>([]);
   const [startPoint, setStartPoint] = useState<StartPoint>(startPointObj);
   const [selectedPolygonId, setSelectedPolygonId] = useState<number>(0);
   const [isDraw, setIsDraw] = useState(false);
@@ -54,69 +59,39 @@ const DrawPolygon: React.FC = () => {
       isDrawing.current = true;
       connectPoint.current = e.target.getStage().getPointerPosition();
       const { x, y } = connectPoint.current;
-      const addCirclePoints = [
-        ...circlePoints,
-        {
-          key: circlePoints.length + 1,
-          points: { x: x, y: y },
-        },
-      ];
+
+      const addCirclePoints = [...circlePoints, x, y];
       setCirclePoints(addCirclePoints);
 
-      if (linePoints.length == 0) {
-        addPolygons(addCirclePoints, x, y);
+      if (lineMovePoints.length == 0) {
+        const addNewPolygon = AddNewPolygons(
+          addCirclePoints,
+          x,
+          y,
+          polygonList,
+          imgWidth,
+          imgHeight
+        );
+        setStartPoint({ x: x, y: y });
+        setLineMovePoints(addNewPolygon.addCurclePoints);
+        setPolygonList(addNewPolygon.polygons);
       } else if (startPoint != null) {
-        const addCirclesInPolygon = updatePolygonPoints(
-          linePoints,
-          addCirclePoints
+        const addCirclesInPolygon = UpdatePolygonPoints(
+          lineMovePoints,
+          addCirclePoints,
+          polygonList,
+          imgWidth,
+          imgHeight
         );
         setPolygonList(addCirclesInPolygon);
       }
     }
   };
 
-  const addPolygons = (circlePoints: CircleData[], x: number, y: number) => {
-    const valuesArray = circlePoints.map((obj) => Object.values(obj));
-    const flattenedArray = valuesArray.flat() as number[]; //[{0,1},{2,3},..] => [0,1,2,3,..]
-    flattenedArray.splice(flattenedArray.length, 2, x, y); // Inserts at index flattenedArray.length
-    const addPolygon: PolygonData[] = [
-      ...polygonList,
-      {
-        key: polygonList.length + 1,
-        startPoint: { x: x, y: y },
-        linePoints: flattenedArray,
-        circlePoints: circlePoints,
-        origin: [0, 0],
-      },
-    ];
-    setStartPoint({ x: x, y: y });
-    setLinePoints(flattenedArray);
-    setPolygonList(addPolygon);
-  };
-
-  const splicePoints = (points: any) => {
-    const chunkSize = 2;
-    const chunks = [];
-    for (let i = 0; i < points.length; i += chunkSize) {
-      const chunk = points.slice(i, i + chunkSize);
-      chunks.push(chunk);
-    }
-    return chunks;
-  };
-  const uniqueSet = (set: any): any[] => {
-    // Convert the array to a Set to remove duplicates
-    var uniqueSet = new Set(set.map(JSON.stringify));
-    // Convert the Set back to an array
-    var uniqueArray = Array.from(uniqueSet).map((item: any) =>
-      JSON.parse(item)
-    );
-    return uniqueArray;
-  };
-
   const handleMouseMove = (e: any) => {
     if (isDrawing.current && isDraw) {
       currentPoint.current = e.target.getStage().getPointerPosition();
-      const chunks = splicePoints(linePoints);
+      const chunks = SplicePoints(lineMovePoints);
       const updateIndex = chunks.length - 2;
       chunks[updateIndex][0] = connectPoint.current.x;
       chunks[updateIndex][1] = connectPoint.current.y;
@@ -124,15 +99,18 @@ const DrawPolygon: React.FC = () => {
       chunks[updateIndex][3] = currentPoint.current.y;
       const flatArray = chunks.flat(1);
 
-      const splice = splicePoints(flatArray);
-      const uniqueArray = uniqueSet(splice);
+      const splice = SplicePoints(flatArray);
+      const uniqueArray = UniqueSet(splice);
       uniqueArray.push([startPoint!.x, startPoint!.y]);
       var updatePoints = uniqueArray.flat();
-      setLinePoints(updatePoints);
+      setLineMovePoints(updatePoints);
 
-      const addCirclesInPolygon = updatePolygonPoints(
+      const addCirclesInPolygon = UpdatePolygonPoints(
         updatePoints,
-        circlePoints
+        circlePoints,
+        polygonList,
+        imgWidth,
+        imgHeight
       );
       setPolygonList(addCirclesInPolygon);
     }
@@ -146,11 +124,11 @@ const DrawPolygon: React.FC = () => {
     // Right-click: Stop drawing
     currentPoint.current = e.target.getStage().getPointerPosition();
     const { x, y } = currentPoint.current;
-    checkAndAddCirclePoint(x,y)
-    
+    checkAndAddCirclePoint(x, y);
+
     e.evt.preventDefault();
     isDrawing.current = false;
-    setLinePoints([]);
+    setLineMovePoints([]);
     setCirclePoints([]);
     setStartPoint(startPointObj);
     setIsDraw(false);
@@ -159,35 +137,16 @@ const DrawPolygon: React.FC = () => {
   // Function to check and add if necessary
   function checkAndAddCirclePoint(x: number, y: number): void {
     // Check if { x, y } exists in any object's points
-    const exists = circlePoints.some(
-      (item) => item.points.x === x && item.points.y === y
+    const spliceCirclePoints = SplicePoints(circlePoints);
+    const exists = spliceCirclePoints.some(
+      (item) => item[0] === x && item[1] === y
     );
 
     // If not exists, add { x, y } to data
     if (!exists) {
-      const newKey = circlePoints.length + 1; // Generate new key
-      circlePoints.push({
-        key: newKey,
-        points: { x: x, y: y }
-      });
+      setCirclePoints([...circlePoints, x, y]);
     }
   }
-
-  const updatePolygonPoints = (line: any, circle: any) => {
-    const addCirclesInPolygon = polygonList.map((poly) => {
-      if (poly.key == polygonList.length) {
-        return {
-          key: poly.key,
-          startPoint: startPoint,
-          linePoints: line,
-          circlePoints: circle,
-          origin: poly.origin,
-        };
-      }
-      return poly;
-    });
-    return addCirclesInPolygon;
-  };
 
   return (
     <div>
@@ -202,12 +161,25 @@ const DrawPolygon: React.FC = () => {
         >
           <Layer>
             {polygonList.map((poly) => {
+              const absolutePolyPoints = RelativeToAbsolutePoints(
+                poly.polyPoints,
+                poly.origin,
+                imgWidth,
+                imgHeight
+              );
+              const absoluteCirclePoints = RelativeToAbsolutePoints(
+                poly.circlePoints.flat(),
+                poly.origin,
+                imgWidth,
+                imgHeight
+              );
+              const flatPolyPoints = absolutePolyPoints.flat();
               return (
                 <Polygon
                   key={poly.key}
                   poly={poly}
-                  linePoints={poly.linePoints}
-                  circlePoints={poly.circlePoints}
+                  polyPoints={flatPolyPoints}
+                  circlePoints={absoluteCirclePoints}
                   isSelected={poly.key === selectedPolygonId}
                   onSelect={() => {
                     setSelectedPolygonId(poly.key);

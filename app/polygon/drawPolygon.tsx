@@ -3,18 +3,18 @@
 import Konva from "konva";
 import React, { useRef, useEffect } from "react";
 import { Line, Circle, Group, Transformer } from "react-konva";
-import { CircleData, PolygonData } from "../types/polygontypes";
+import { PolygonData } from "../types/polygontypes";
 
 interface PolygonProps {
   poly: PolygonData;
-  linePoints: number[];
-  circlePoints: CircleData[];
+  polyPoints: number[];
+  circlePoints: number[][];
   isSelected: boolean;
   onSelect: () => void;
 }
 const Polygon: React.FC<PolygonProps> = ({
   poly,
-  linePoints,
+  polyPoints,
   circlePoints,
   isSelected,
   onSelect,
@@ -47,7 +47,7 @@ const Polygon: React.FC<PolygonProps> = ({
         key={poly.key}
         onClick={onSelect}
         onTap={onSelect}
-        draggable={isSelected}
+        //draggable={isSelected}
         //onDragEnd={handleOnDrag}
         // dragBoundFunc={(pos) => {
         //   return handleGroupDragBound(pos);
@@ -62,23 +62,29 @@ const Polygon: React.FC<PolygonProps> = ({
         <Line
           closed
           id={poly.key.toString()}
-          points={linePoints}
+          points={polyPoints}
           stroke={stroke}
           strokeWidth={2}
         />
 
-        {circlePoints.map((circle: any) => {
+        {circlePoints.map((circle: any, index:number) => {
           return (
             <Circle
               //draggable={isSelected}
-              key={circle.key}
-              x={circle.points.x}
-              y={circle.points.y}
+              key={index}
+              x={circle[0]}
+              y={circle[1]}
               radius={3}
               fill={stroke}
               // onDragMove={(e) => {
               //   handleCircleDragMove(circle.key, e);
               // }}
+              onMouseEnter={(e) => {
+                mouseEnter(e);
+              }}
+              onMouseLeave={(e) => {
+                mouseLeave(e);
+              }}
             />
           );
         })}
